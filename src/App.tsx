@@ -17,51 +17,58 @@ function App() {
   );
 
   const MIN_CONFIDENCE = 0.4;
-  const RADIUS = 5;
-  const WIDTH = 1000;
-  const HEIGHT = 700;
+  const LINE_WIDTH = 8;
+  const RADIUS = 12;
+  const WIDTH = window.innerWidth;
+  const HEIGHT = window.innerHeight;
 
   // Add state to track if detection is running
   const [isRunning, setIsRunning] = useState(false);
 
   // Create a detector and setup webcam
   useEffect(() => {
-    const fn = async () => {
-      // Setup webcam
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-        });
+    const setupCamera = async () => {
+      if (!navigator.mediaDevices?.getUserMedia || !videoRef || !canvasRef)
+        return;
 
-        if (videoRef) {
-          videoRef.srcObject = stream;
-          videoRef.play();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      });
 
-          // Set canvas size to match video
-          if (canvasRef) {
-            canvasRef.width = WIDTH;
-            canvasRef.height = HEIGHT;
-            // canvasRef.width = videoRef.videoWidth || 500;
-            // canvasRef.height = videoRef.videoHeight || 300;
-          }
+      if (videoRef) {
+        videoRef.srcObject = stream;
+        videoRef.play();
+
+        // Set canvas size to match video
+        if (canvasRef) {
+          canvasRef.width = WIDTH;
+          canvasRef.height = HEIGHT;
         }
       }
-      await tf.ready();
     };
-    fn();
-  }, [videoRef, canvasRef]); // Add canvasRef to dependencies
+
+    setupCamera();
+  }, [videoRef, canvasRef]);
 
   // Create detector once on mount
   useEffect(() => {
     const initDetector = async () => {
-      const detectorConfig = {
-        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-      };
-      const detector = await poseDetection.createDetector(
-        poseDetection.SupportedModels.MoveNet,
-        detectorConfig
-      );
-      setDetector(detector);
+      try {
+        // Initialize TensorFlow.js backend
+        await tf.setBackend("webgl");
+        await tf.ready();
+
+        const detectorConfig = {
+          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+        };
+        const newDetector = await poseDetection.createDetector(
+          poseDetection.SupportedModels.MoveNet,
+          detectorConfig
+        );
+        setDetector(newDetector);
+      } catch (error) {
+        console.error("Failed to initialize detector:", error);
+      }
     };
 
     initDetector();
@@ -69,8 +76,7 @@ function App() {
 
   // Add function to draw nose
   const draw = (poses: poseDetection.Pose[]) => {
-    // console.log("poses", poses);
-    if (!canvasRef || !videoRef) return;
+    if (!canvasRef || !videoRef || !poses.length) return;
 
     const ctx = canvasRef.getContext("2d");
     if (!ctx) return;
@@ -78,304 +84,211 @@ function App() {
     // Clear previous frame
     ctx.clearRect(0, 0, canvasRef.width, canvasRef.height);
 
-    const scaleX = canvasRef.width / videoRef.videoWidth;
-    const scaleY = canvasRef.height / videoRef.videoHeight;
+    // Calculate video scaling to maintain aspect ratio
+    const videoAspect = videoRef.videoWidth / videoRef.videoHeight;
+    const windowAspect = window.innerWidth / window.innerHeight;
 
+    let scale;
+    if (windowAspect > videoAspect) {
+      scale = window.innerWidth / videoRef.videoWidth;
+    } else {
+      scale = window.innerHeight / videoRef.videoHeight;
+    }
+
+    // Calculate offsets to center the video
+    const xOffset = (window.innerWidth - videoRef.videoWidth * scale) / 2;
+    const yOffset = (window.innerHeight - videoRef.videoHeight * scale) / 2;
+
+    // Find all keypoints
     const nose = poses[0].keypoints.find((point) => point.name === "nose");
-    // const leftEar = poses[0].keypoints.find(
-    //   (point) => point.name === "left_ear"
-    // );
-    // const rightEar = poses[0].keypoints.find(
-    //   (point) => point.name === "right_ear"
-    // );
-
     const leftEye = poses[0].keypoints.find(
-      (point) =>
-        point.name === "left_eye" && point.score && point.score > MIN_CONFIDENCE
+      (point) => point.name === "left_eye"
     );
     const rightEye = poses[0].keypoints.find(
       (point) => point.name === "right_eye"
     );
-
-    // const leftEar = poses[0].keypoints.find(
-    //   (point) => point.name === "left_ear"
-    // );
-    // const rightEar = poses[0].keypoints.find(
-    //   (point) => point.name === "right_ear"
-    // );
-
-    // Draw ear-nose-ear lines
-    if (nose && leftEye && rightEye) {
-      ctx.beginPath();
-      ctx.moveTo(leftEye.x * scaleX, leftEye.y * scaleY);
-      ctx.lineTo(nose.x * scaleX, nose.y * scaleY);
-      ctx.lineTo(rightEye.x * scaleX, rightEye.y * scaleY);
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
+    const leftEar = poses[0].keypoints.find(
+      (point) => point.name === "left_ear"
+    );
+    const rightEar = poses[0].keypoints.find(
+      (point) => point.name === "right_ear"
+    );
     const leftShoulder = poses[0].keypoints.find(
-      (point) =>
-        point.name === "left_shoulder" &&
-        point.score &&
-        point.score > MIN_CONFIDENCE
+      (point) => point.name === "left_shoulder"
     );
     const rightShoulder = poses[0].keypoints.find(
-      (point) =>
-        point.name === "right_shoulder" &&
-        point.score &&
-        point.score > MIN_CONFIDENCE
+      (point) => point.name === "right_shoulder"
     );
-
-    // Add hands
-    const leftWrist = poses[0].keypoints.find(
-      (point) =>
-        point.name === "left_wrist" &&
-        point.score &&
-        point.score > MIN_CONFIDENCE
-    );
-    const rightWrist = poses[0].keypoints.find(
-      (point) =>
-        point.name === "right_wrist" &&
-        point.score &&
-        point.score > MIN_CONFIDENCE
-    );
-
     const leftElbow = poses[0].keypoints.find(
-      (point) =>
-        point.name === "left_elbow" &&
-        point.score &&
-        point.score > MIN_CONFIDENCE
+      (point) => point.name === "left_elbow"
+    );
+    const leftWrist = poses[0].keypoints.find(
+      (point) => point.name === "left_wrist"
     );
     const rightElbow = poses[0].keypoints.find(
-      (point) =>
-        point.name === "right_elbow" &&
-        point.score &&
-        point.score > MIN_CONFIDENCE
+      (point) => point.name === "right_elbow"
     );
-
+    const rightWrist = poses[0].keypoints.find(
+      (point) => point.name === "right_wrist"
+    );
     const leftHip = poses[0].keypoints.find(
-      (point) =>
-        point.name === "left_hip" && point.score && point.score > MIN_CONFIDENCE
+      (point) => point.name === "left_hip"
     );
     const rightHip = poses[0].keypoints.find(
-      (point) =>
-        point.name === "right_hip" &&
-        point.score &&
-        point.score > MIN_CONFIDENCE
+      (point) => point.name === "right_hip"
     );
-
     const leftKnee = poses[0].keypoints.find(
-      (point) =>
-        point.name === "left_knee" &&
-        point.score &&
-        point.score > MIN_CONFIDENCE
+      (point) => point.name === "left_knee"
+    );
+    const leftAnkle = poses[0].keypoints.find(
+      (point) => point.name === "left_ankle"
     );
     const rightKnee = poses[0].keypoints.find(
-      (point) =>
-        point.name === "right_knee" &&
-        point.score &&
-        point.score > MIN_CONFIDENCE
-    );
-
-    const leftAnkle = poses[0].keypoints.find(
-      (point) =>
-        point.name === "left_ankle" &&
-        point.score &&
-        point.score > MIN_CONFIDENCE
+      (point) => point.name === "right_knee"
     );
     const rightAnkle = poses[0].keypoints.find(
-      (point) =>
-        point.name === "right_ankle" &&
-        point.score &&
-        point.score > MIN_CONFIDENCE
+      (point) => point.name === "right_ankle"
     );
 
-    if (nose) {
+    // Draw ear-nose-ear lines
+    if (nose && leftEar && rightEar) {
       ctx.beginPath();
-      ctx.arc(nose.x * scaleX, nose.y * scaleY, RADIUS, 0, 2 * Math.PI);
-      ctx.fillStyle = "pink";
-      ctx.fill();
-    }
-    if (rightEye) {
-      ctx.beginPath();
-      ctx.arc(rightEye.x * scaleX, rightEye.y * scaleY, RADIUS, 0, 2 * Math.PI);
-      ctx.fillStyle = "blue";
-      ctx.fill();
-    }
-    if (leftEye) {
-      ctx.beginPath();
-      ctx.arc(leftEye.x * scaleX, leftEye.y * scaleY, RADIUS, 0, 2 * Math.PI);
-      ctx.fillStyle = "blue";
-      ctx.fill();
-    }
-    // if (leftEar) {
-    //   ctx.beginPath();
-    //   ctx.arc(leftEar.x * scaleX, leftEar.y * scaleY, RADIUS, 0, 2 * Math.PI);
-    //   ctx.fillStyle = "brown";
-    //   ctx.fill();
-    // }
-    // if (rightEar) {
-    //   ctx.beginPath();
-    //   ctx.arc(rightEar.x * scaleX, rightEar.y * scaleY, RADIUS, 0, 2 * Math.PI);
-    //   ctx.fillStyle = "brown";
-    //   ctx.fill();
-    // }
-
-    if (leftShoulder) {
-      ctx.beginPath();
-      ctx.arc(
-        leftShoulder.x * scaleX,
-        leftShoulder.y * scaleY,
-        RADIUS,
-        0,
-        2 * Math.PI
-      );
-      ctx.fillStyle = "yellow";
-      ctx.fill();
-    }
-    if (rightShoulder) {
-      ctx.beginPath();
-      ctx.arc(
-        rightShoulder.x * scaleX,
-        rightShoulder.y * scaleY,
-        RADIUS,
-        0,
-        2 * Math.PI
-      );
-      ctx.fillStyle = "yellow";
-      ctx.fill();
-    }
-
-    // Draw hands
-    if (leftWrist) {
-      ctx.beginPath();
-      ctx.arc(
-        leftWrist.x * scaleX,
-        leftWrist.y * scaleY,
-        RADIUS,
-        0,
-        2 * Math.PI
-      );
-      ctx.fillStyle = "green";
-      ctx.fill();
-    }
-    if (rightWrist) {
-      ctx.beginPath();
-      ctx.arc(
-        rightWrist.x * scaleX,
-        rightWrist.y * scaleY,
-        RADIUS,
-        0,
-        2 * Math.PI
-      );
-      ctx.fillStyle = "green";
-      ctx.fill();
-    }
-
-    if (leftElbow) {
-      ctx.beginPath();
-      ctx.arc(
-        leftElbow.x * scaleX,
-        leftElbow.y * scaleY,
-        RADIUS,
-        0,
-        2 * Math.PI
-      );
-      ctx.fillStyle = "white";
-      ctx.fill();
-    }
-    if (rightElbow) {
-      ctx.beginPath();
-      ctx.arc(
-        rightElbow.x * scaleX,
-        rightElbow.y * scaleY,
-        RADIUS,
-        0,
-        2 * Math.PI
-      );
-      ctx.fillStyle = "white";
-      ctx.fill();
-    }
-
-    // Draw wrist-elbow-arm lines
-    if (leftShoulder && leftElbow && leftWrist) {
-      ctx.beginPath();
-      ctx.moveTo(leftShoulder.x * scaleX, leftShoulder.y * scaleY);
-      ctx.lineTo(leftElbow.x * scaleX, leftElbow.y * scaleY);
-      ctx.lineTo(leftWrist.x * scaleX, leftWrist.y * scaleY);
+      ctx.moveTo(leftEar.x * scale + xOffset, leftEar.y * scale + yOffset);
+      ctx.lineTo(nose.x * scale + xOffset, nose.y * scale + yOffset);
+      ctx.lineTo(rightEar.x * scale + xOffset, rightEar.y * scale + yOffset);
       ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-    if (rightShoulder && rightElbow && rightWrist) {
-      ctx.beginPath();
-      ctx.moveTo(rightShoulder.x * scaleX, rightShoulder.y * scaleY);
-      ctx.lineTo(rightElbow.x * scaleX, rightElbow.y * scaleY);
-      ctx.lineTo(rightWrist.x * scaleX, rightWrist.y * scaleY);
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = LINE_WIDTH / 2;
       ctx.stroke();
     }
 
-    // Draw hip-hip lines
-    if (leftHip && rightHip) {
+    // Draw eye to eye
+    if (leftEye && rightEye) {
       ctx.beginPath();
-      ctx.moveTo(leftHip.x * scaleX, leftHip.y * scaleY);
-      ctx.lineTo(rightHip.x * scaleX, rightHip.y * scaleY);
+      ctx.moveTo(leftEye.x * scale + xOffset, leftEye.y * scale + yOffset);
+      ctx.lineTo(rightEye.x * scale + xOffset, rightEye.y * scale + yOffset);
       ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
-    // Draw shoulder-shoulder lines
-    if (leftShoulder && rightShoulder) {
-      ctx.beginPath();
-      ctx.moveTo(leftShoulder.x * scaleX, leftShoulder.y * scaleY);
-      ctx.lineTo(rightShoulder.x * scaleX, rightShoulder.y * scaleY);
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
-    // Draw ankle-knee-hip lines
-    if (leftHip && leftKnee && leftAnkle) {
-      ctx.beginPath();
-      ctx.moveTo(leftHip.x * scaleX, leftHip.y * scaleY);
-      ctx.lineTo(leftKnee.x * scaleX, leftKnee.y * scaleY);
-      ctx.lineTo(leftAnkle.x * scaleX, leftAnkle.y * scaleY);
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
-    if (rightHip && rightKnee && rightAnkle) {
-      ctx.beginPath();
-      ctx.moveTo(rightHip.x * scaleX, rightHip.y * scaleY);
-      ctx.lineTo(rightKnee.x * scaleX, rightKnee.y * scaleY);
-      ctx.lineTo(rightAnkle.x * scaleX, rightAnkle.y * scaleY);
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = LINE_WIDTH / 2;
       ctx.stroke();
     }
 
     // Draw mid-hips to mid-shoulders
     if (leftHip && rightHip && leftShoulder && rightShoulder) {
-      // Calculate midpoints
       const midHipX = (leftHip.x + rightHip.x) / 2;
       const midHipY = (leftHip.y + rightHip.y) / 2;
       const midShoulderX = (leftShoulder.x + rightShoulder.x) / 2;
       const midShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
 
-      // Draw line between midpoints
       ctx.beginPath();
-      ctx.moveTo(midHipX * scaleX, midHipY * scaleY);
-      ctx.lineTo(midShoulderX * scaleX, midShoulderY * scaleY);
+      ctx.moveTo(midHipX * scale + xOffset, midHipY * scale + yOffset);
+      ctx.lineTo(
+        midShoulderX * scale + xOffset,
+        midShoulderY * scale + yOffset
+      );
       ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = LINE_WIDTH;
       ctx.stroke();
     }
+
+    // Draw shoulder to shoulder
+    if (leftShoulder && rightShoulder) {
+      ctx.beginPath();
+      ctx.moveTo(
+        leftShoulder.x * scale + xOffset,
+        leftShoulder.y * scale + yOffset
+      );
+      ctx.lineTo(
+        rightShoulder.x * scale + xOffset,
+        rightShoulder.y * scale + yOffset
+      );
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = LINE_WIDTH;
+      ctx.stroke();
+    }
+
+    // Draw hip to hip
+    if (leftHip && rightHip) {
+      ctx.beginPath();
+      ctx.moveTo(leftHip.x * scale + xOffset, leftHip.y * scale + yOffset);
+      ctx.lineTo(rightHip.x * scale + xOffset, rightHip.y * scale + yOffset);
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = LINE_WIDTH;
+      ctx.stroke();
+    }
+
+    // Draw leftWrist-leftElbow-leftShoulder
+    if (leftWrist && leftElbow && leftShoulder) {
+      ctx.beginPath();
+      ctx.moveTo(leftWrist.x * scale + xOffset, leftWrist.y * scale + yOffset);
+      ctx.lineTo(leftElbow.x * scale + xOffset, leftElbow.y * scale + yOffset);
+      ctx.lineTo(
+        leftShoulder.x * scale + xOffset,
+        leftShoulder.y * scale + yOffset
+      );
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = LINE_WIDTH;
+      ctx.stroke();
+    }
+
+    // Draw rightWrist-rightElbow-rightShoulder
+    if (rightWrist && rightElbow && rightShoulder) {
+      ctx.beginPath();
+      ctx.moveTo(
+        rightWrist.x * scale + xOffset,
+        rightWrist.y * scale + yOffset
+      );
+      ctx.lineTo(
+        rightElbow.x * scale + xOffset,
+        rightElbow.y * scale + yOffset
+      );
+      ctx.lineTo(
+        rightShoulder.x * scale + xOffset,
+        rightShoulder.y * scale + yOffset
+      );
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = LINE_WIDTH;
+      ctx.stroke();
+    }
+
+    // Draw leftHip-leftKnee-leftAnkle
+    if (leftHip && leftKnee && leftAnkle) {
+      ctx.beginPath();
+      ctx.moveTo(leftHip.x * scale + xOffset, leftHip.y * scale + yOffset);
+      ctx.lineTo(leftKnee.x * scale + xOffset, leftKnee.y * scale + yOffset);
+      ctx.lineTo(leftAnkle.x * scale + xOffset, leftAnkle.y * scale + yOffset);
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = LINE_WIDTH;
+      ctx.stroke();
+    }
+
+    // Draw rightHip-rightKnee-rightAnkle
+    if (rightHip && rightKnee && rightAnkle) {
+      ctx.beginPath();
+      ctx.moveTo(rightHip.x * scale + xOffset, rightHip.y * scale + yOffset);
+      ctx.lineTo(rightKnee.x * scale + xOffset, rightKnee.y * scale + yOffset);
+      ctx.lineTo(
+        rightAnkle.x * scale + xOffset,
+        rightAnkle.y * scale + yOffset
+      );
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = LINE_WIDTH;
+      ctx.stroke();
+    }
+
+    // Draw all points
+    poses[0].keypoints.forEach((point) => {
+      if (point.score && point.score > MIN_CONFIDENCE) {
+        ctx.beginPath();
+        ctx.arc(
+          point.x * scale + xOffset,
+          point.y * scale + yOffset,
+          RADIUS,
+          0,
+          2 * Math.PI
+        );
+        ctx.fillStyle = "red";
+        ctx.fill();
+      }
+    });
   };
 
   // Modify detect function
@@ -395,60 +308,67 @@ function App() {
   return (
     <div
       style={{
-        width: "100%",
+        width: "100vw",
         height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "flex-start",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
       <div
-        id="stats"
-        style={{ position: "absolute", top: "10px", left: "10px" }}
-      ></div>
-      <div style={{ display: "flex", flexDirection: "column" }}>
+        style={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+        }}
+      >
         <canvas
           ref={setCanvasRef}
-          id="output"
           style={{
-            zIndex: 100,
             position: "absolute",
-            width: `${WIDTH}px`,
-            height: `${HEIGHT}px`,
-            // border: "3px solid red",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            zIndex: 1,
           }}
-        ></canvas>
+        />
         <video
           ref={setVideoRef}
-          style={{ width: `${WIDTH}px`, height: `${HEIGHT}px` }}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
         />
       </div>
       <div
         style={{
-          display: "flex",
-          flexDirection: "row",
-          marginTop: 30,
-          gap: 10,
+          position: "fixed",
+          bottom: "20px",
+          right: "20px",
+          zIndex: 2,
         }}
       >
         <button
           onClick={() => {
             setIsRunning(true);
-            requestAnimationFrame(detect);
+            detect();
           }}
-          style={{ backgroundColor: "green", color: "white" }}
+          style={{
+            backgroundColor: "green",
+            color: "white",
+            padding: "12px 24px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+          }}
         >
           Start
         </button>
-        {/* <button
-          onClick={() => {
-            setIsRunning(false);
-          }}
-          style={{ backgroundColor: "red", color: "white" }}
-        >
-          Stop
-        </button> */}
       </div>
     </div>
   );
