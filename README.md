@@ -1,50 +1,45 @@
-# React + TypeScript + Vite
+# KVA Web
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Just a proof of concept to see if I can get the pose detection model to work in the browser. It is certainly not without bugs, but it was fun to work on! 🙂
 
-Currently, two official plugins are available:
+<img src="./images/01.jpg" width="500" alt="Screenshot 1" />
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Tools used:
 
-## Expanding the ESLint configuration
+- [Tensorflow.js](https://www.tensorflow.org/js)
+- [Pose Detection](https://github.com/tensorflow/tfjs-models/tree/master/pose-detection)
+- [React](https://react.dev/)
+- [Vite](https://vitejs.dev/)
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+## Setup
 
-- Configure the top-level `parserOptions` property like this:
-
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+pnpm install
 ```
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+## Run
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
-
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
+```bash
+pnpm dev
 ```
+
+## How it works
+
+Open up the app, allow the camera capture then show your whole self in the camera. The tensorflow algorith I am using here is [Pose Detection](https://github.com/tensorflow/tfjs-models/tree/master/pose-detection). It should pick you up and mark important parts of your body, like:
+
+- Left and right ear
+- Left and right eye
+- Left and right shoulder
+- Left and right elbow
+- Left and right wrist
+- Left and right hip
+- Left and right knee
+- Left and right ankle
+
+## Screenshots
+
+![Screenshot 1](./images/01.jpg)
+![Screenshot 2](./images/02.jpg)
+![Screenshot 3](./images/03.jpg)
+![Screenshot 4](./images/04.jpg)
+![Screenshot 5](./images/05.jpg)

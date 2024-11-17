@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import * as poseDetection from "@tensorflow-models/pose-detection";
-import * as tf from "@tensorflow/tfjs"; // Add this line
+import * as tf from "@tensorflow/tfjs";
 import "@tensorflow/tfjs-backend-webgl";
 
 import "./App.css";
